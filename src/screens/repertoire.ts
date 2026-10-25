@@ -111,15 +111,28 @@ export async function drillScreen({ root, params }: ScreenCtx) {
   const nameEl = h('div.opening-name');
   const { under, bar } = boardLayout(root, { header: header('Drill', { back: 'learn/repertoire' }), board: board.el, above: top });
   under.append(status.el, nameEl);
-  bar.append(
-    actionBtn('hint', 'Hint', () => {
-      if (ply < line.ucis.length) {
-        board.arrow(line.ucis[ply], 'hint');
-        mistakes++;
-      }
-    }),
-    actionBtn('next', 'Skip', () => nextLine()),
-  );
+  let hintLevel = 0;
+  // First press highlights the piece to move, second press reveals the move with an arrow.
+  const hintBtn = actionBtn('hint', 'Hint', () => {
+    if (ply >= line.ucis.length || !isUser(ply) || hintLevel >= 2) return;
+    if (hintLevel === 0) mistakes++;
+    hintLevel++;
+    if (hintLevel === 1) {
+      board.markSquare(line.ucis[ply].slice(0, 2), 'hint');
+      hintBtn.querySelector('span')!.textContent = 'Reveal';
+    } else {
+      board.clearMarks();
+      board.arrow(line.ucis[ply], 'hint');
+    }
+  });
+  bar.append(hintBtn, actionBtn('next', 'Skip', () => nextLine()));
+
+  function resetHint() {
+    hintLevel = 0;
+    hintBtn.querySelector('span')!.textContent = 'Hint';
+    board.clearMarks();
+    board.clearShapes();
+  }
 
   board.setOnMove((m) => onMove(m));
 
@@ -139,7 +152,7 @@ export async function drillScreen({ root, params }: ScreenCtx) {
     countEl.textContent = `${done + 1}/${total}`;
     fill.style.width = `${(done / total) * 100}%`;
     nameEl.replaceChildren(h('span', line.name));
-    board.clearShapes();
+    resetHint();
     board.badge('a1', null);
     board.setMovable('none');
     board.setOrientation(line.color);
@@ -168,6 +181,7 @@ export async function drillScreen({ root, params }: ScreenCtx) {
     const expected = line.ucis[ply];
     board.setMovable('none');
     if (m.uci === expected) {
+      resetHint();
       board.badge(m.to, 'ok');
       ply++;
       later(step, 350);
@@ -177,11 +191,10 @@ export async function drillScreen({ root, params }: ScreenCtx) {
     tries++;
     board.badge(m.to, 'bad');
     play('wrong');
-    status.set('Not your repertoire move', 'bad', tries >= 2 ? `You play ${line.sans[ply]} here` : 'Try again');
+    status.set('Not your repertoire move', 'bad', tries >= 2 && hintLevel < 2 ? 'Try again, or tap Hint for help' : 'Try again');
     later(() => {
       board.undo();
       board.badge('a1', null);
-      if (tries >= 2) board.arrow(expected, 'hint');
       board.setMovable(line.color);
     }, 600);
   }

@@ -13,7 +13,7 @@ import { h, icon, toast } from '../ui/dom';
 import { header, boardLayout, actionBtn } from '../ui/layout';
 import { navigate } from '../router';
 import type { ScreenCtx } from '../router';
-import { moveText } from './learn';
+import { moveText, startRandomLesson } from './learn';
 
 type Phase = 'learn' | 'practice' | 'beyond' | 'done';
 
@@ -42,6 +42,7 @@ export async function lessonScreen({ root, params }: ScreenCtx) {
   let alive = true;
   let beyondCount = 0;
   let attempts = 0;
+  let hintLevel = 0;
   let timers: number[] = [];
   let pendingEval: Promise<{ best: string; lines: EngineLine[] }> | null = null;
 
@@ -53,8 +54,9 @@ export async function lessonScreen({ root, params }: ScreenCtx) {
 
   const { under, bar } = boardLayout(root, { header: header(line.family, { back: 'learn', sub: line.variation || `${line.eco} · you play ${side}` }), board: board.el, above: steps });
   under.append(coach, extra);
+  const hintBtn = actionBtn('hint', 'Hint', () => hint());
   bar.append(
-    actionBtn('hint', 'Hint', () => hint()),
+    hintBtn,
     actionBtn('retry', 'Restart', () => start('learn')),
     actionBtn('book', 'Moves', () => toast(moveText(line.sans))),
     actionBtn('analyze', 'Analyze', () => navigate(`analyze?moves=${board.history().map((m) => m.from + m.to + (m.promotion || '')).join(',')}&o=${side}`)),
@@ -81,6 +83,13 @@ export async function lessonScreen({ root, params }: ScreenCtx) {
     });
   }
 
+  function resetHint() {
+    hintLevel = 0;
+    hintBtn.querySelector('span')!.textContent = 'Hint';
+    board.clearMarks();
+    board.clearShapes();
+  }
+
   function isUserPly(n: number) {
     return (n % 2 === 0) === (side === 'white');
   }
@@ -93,12 +102,12 @@ export async function lessonScreen({ root, params }: ScreenCtx) {
     attempts = 0;
     if (p === 'learn') mistakes = 0;
     extra.replaceChildren();
-    board.clearShapes();
+    resetHint();
     board.badge('a1', null);
     board.setMovable('none');
     board.setPosition('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1');
-    if (p === 'learn') say(`Let’s learn the <b>${line.name}</b>. You play <b>${side}</b>. Follow the arrows and I’ll explain each move.`);
-    else say(`Now play it from memory. <b>No arrows this time.</b> Tap Hint if you get stuck.`);
+    if (p === 'learn') say(`Let’s learn the <b>${line.name}</b>. You play <b>${side}</b>. I’ll tell you each move and why it’s played.`);
+    else say(`Now play it from memory. Tap Hint if you get stuck.`);
     later(step, 900);
   }
 
@@ -129,25 +138,37 @@ export async function lessonScreen({ root, params }: ScreenCtx) {
       return;
     }
     attempts = 0;
+    resetHint();
     board.setMovable(side);
     if (phase === 'learn') {
-      board.clearShapes();
-      board.arrow(uci, 'hint');
       say(`Play <b>${line.sans[ply]}</b>. ${explanationFor(ply)}`);
     } else {
       say(`Your move. What does the book play here?`);
     }
   }
 
+  // First press highlights the piece to move, second press reveals the move with an arrow.
   function hint() {
+    if (hintLevel >= 2) return;
     if (phase === 'learn' || phase === 'practice') {
       if (ply < line.ucis.length && isUserPly(ply)) {
-        board.clearShapes();
-        board.arrow(line.ucis[ply], 'hint');
-        if (phase === 'practice') mistakes++;
+        if (phase === 'practice' && hintLevel === 0) mistakes++;
+        showHint(line.ucis[ply]);
       }
     } else if (phase === 'beyond' && pendingEval) {
-      void pendingEval.then((r) => r.best && board.arrow(r.best, 'hint'));
+      const level = hintLevel;
+      void pendingEval.then((r) => alive && hintLevel === level && r.best && showHint(r.best));
+    }
+  }
+
+  function showHint(uci: string) {
+    hintLevel++;
+    if (hintLevel === 1) {
+      board.markSquare(uci.slice(0, 2), 'hint');
+      hintBtn.querySelector('span')!.textContent = 'Reveal';
+    } else {
+      board.clearMarks();
+      board.arrow(uci, 'hint');
     }
   }
 
@@ -159,6 +180,7 @@ export async function lessonScreen({ root, params }: ScreenCtx) {
   function onBookMove(m: BoardMove) {
     const expected = line.ucis[ply];
     if (m.uci === expected) {
+      resetHint();
       board.badge(m.to, 'book');
       if (phase === 'practice') say(`<b>Correct!</b> ${explanationFor(ply)}`);
       ply++;
@@ -171,11 +193,10 @@ export async function lessonScreen({ root, params }: ScreenCtx) {
     board.badge(m.to, 'bad');
     play('wrong');
     board.setMovable('none');
-    say(`<b>${m.san}</b> isn’t the book move here. ${attempts >= 2 ? `The move is <b>${line.sans[ply]}</b>.` : 'Try again.'}`, true);
+    say(`<b>${m.san}</b> isn’t the book move here. ${attempts >= 2 && hintLevel < 2 ? 'Try again, or tap Hint for help.' : 'Try again.'}`, true);
     later(() => {
       board.undo();
       board.badge('a1', null);
-      if (attempts >= 2) board.arrow(expected, 'hint');
       board.setMovable(side);
     }, 600);
   }
@@ -218,6 +239,7 @@ export async function lessonScreen({ root, params }: ScreenCtx) {
       return;
     }
     attempts = 0;
+    resetHint();
     const fen = board.fen;
     pendingEval = engine.analyze(fen, { depth: 14, multipv: 3 });
     const named = book.lookup(fen).opening;
@@ -252,6 +274,7 @@ export async function lessonScreen({ root, params }: ScreenCtx) {
       }
     }
     if (verdict !== 'bad') {
+      resetHint();
       board.badge(m.to, verdict === 'book' ? 'book' : bestUci === m.uci ? 'best' : 'ok');
       play('correct');
       say(verdict === 'book' ? `<b>${m.san}</b> is a book move. Well played.` : bestUci === m.uci ? `<b>${m.san}</b> is the engine’s top choice!` : `<b>${m.san}</b> is a good move.`);
@@ -262,18 +285,11 @@ export async function lessonScreen({ root, params }: ScreenCtx) {
     attempts++;
     board.badge(m.to, 'bad');
     play('wrong');
-    const bestSan = sanOf(prevFen, bestUci);
-    say(`${lossText} ${attempts >= 2 ? `The best move is <b>${bestSan}</b>.` : 'Try to find a better move.'}`, true);
+    say(`${lossText} ${attempts >= 2 && hintLevel < 2 ? 'Try again, or tap Hint for help.' : 'Try to find a better move.'}`, true);
     later(() => {
       board.undo();
       board.badge('a1', null);
-      if (attempts >= 2 && bestUci) {
-        board.play(bestUci);
-        beyondCount++;
-        later(beyondStep, 700);
-      } else {
-        board.setMovable(side);
-      }
+      board.setMovable(side);
     }, 700);
   }
 
@@ -306,6 +322,7 @@ export async function lessonScreen({ root, params }: ScreenCtx) {
         h('button.btn.gray.small', { onclick: () => start('practice') }, 'Practice again'),
         nextLine ? h('button.btn.gray.small', { onclick: () => navigate(`learn/lesson?i=${nextLine.idx}&side=${side}`, { replace: true }) }, 'Next variation') : h('button.btn.gray.small', { onclick: () => navigate(`learn/explore?moves=${board.history().map((m) => m.from + m.to + (m.promotion || '')).join(',')}&o=${side}`) }, 'Explore'),
       ),
+      h('div.btn-row', h('button.btn.gray.small', { onclick: () => void startRandomLesson(book, line.idx, true) }, icon('dice'), 'Random opening')),
     );
     const r = await engine.analyze(board.fen, { depth: 16 });
     if (!alive || !r.lines[0]) return;
@@ -340,12 +357,4 @@ function weighted(items: [string, number][]): string | null {
     if (r <= 0) return k;
   }
   return items[0][0];
-}
-
-function sanOf(fen: string, uci: string): string {
-  try {
-    return new Chess(fen).move(parseUci(uci)).san;
-  } catch {
-    return uci;
-  }
 }

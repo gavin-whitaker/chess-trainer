@@ -1,7 +1,7 @@
 import { Chess } from 'chess.js';
 import { miniBoard, parseUci } from '../board/Board';
 import { loadBook, FEATURED, lineSide, type OpeningLine, type Book } from '../openings/book';
-import { lessonRecords, lastLesson, starsText, type LessonRecord } from '../openings/progress';
+import { lessonRecords, lastLesson, randomLesson, starsText, type LessonRecord } from '../openings/progress';
 import { repertoire } from '../db';
 import { isDue } from '../openings/srs';
 import { h, icon } from '../ui/dom';
@@ -49,6 +49,7 @@ export async function learnHub({ root }: ScreenCtx) {
       tile('repeat', 'c-green', 'My Repertoire', due ? `${due} line${due > 1 ? 's' : ''} due` : `${rep.length} lines saved`, () => navigate('learn/repertoire')),
     ),
   );
+  root.append(h('div', { style: { padding: '0 14px 8px' } }, h('button.btn.gray', { onclick: () => startRandomLesson(book) }, icon('dice'), 'Random Opening')));
   if (due) root.append(h('div', { style: { padding: '0 14px 8px' } }, h('button.btn.green', { onclick: () => navigate('learn/drill') }, `Review ${due} due line${due > 1 ? 's' : ''}`)));
 
   root.append(sectionTitle('Popular openings'));
@@ -68,6 +69,11 @@ export async function learnHub({ root }: ScreenCtx) {
     }));
   }
   root.append(list, h('div', { style: { padding: '0 14px 16px' } }, h('button.btn.gray', { onclick: () => navigate('learn/browse') }, `Browse all ${book.lines.length.toLocaleString()} openings`)));
+}
+
+export async function startRandomLesson(book: Book, exclude?: number, replace = false) {
+  const pick = await randomLesson(book, exclude);
+  if (pick) navigate(`learn/lesson?i=${pick.idx}&side=${pick.side}`, { replace });
 }
 
 function tile(ic: Parameters<typeof icon>[0], color: string, title: string, sub: string, onclick: () => void): HTMLElement {
