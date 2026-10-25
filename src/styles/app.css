@@ -298,6 +298,17 @@ body.full .tabbar {
   width: auto;
 }
 
+.btn.compact {
+  min-height: 42px;
+  font-size: 16px;
+  margin-top: 8px;
+}
+
+.btn.compact .ic svg {
+  width: 18px;
+  height: 18px;
+}
+
 .btn:disabled {
   opacity: 0.5;
 }

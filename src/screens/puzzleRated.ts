@@ -36,46 +36,55 @@ export async function puzzleTrainer(root: HTMLElement, opts: TrainerOptions) {
       started = Date.now();
       status.set(`${color === 'white' ? 'White' : 'Black'} to move`, color, 'Find the best move');
     },
-    onCorrect: () => status.set('Best move!', 'ok', 'Keep going…'),
+    onCorrect: () => {
+      status.set('Best move!', 'ok', 'Keep going…');
+      setHintLabel();
+    },
     onMistake: async () => {
-      status.set('Incorrect', 'bad', 'Try again, or tap Solution');
+      status.set('Incorrect', 'bad', 'Try again, or tap Hint');
       await record(false);
-      showDone(false);
     },
     onSolved: async (clean) => {
       status.set(clean ? 'Solved!' : 'Completed', 'ok', clean ? 'Nice work.' : 'Solved with help.');
       await record(clean);
       if (puzzle) opts.onFinished?.(puzzle);
-      showDone(true);
+      showDone();
     },
   });
 
-  const hintBtn = actionBtn('hint', 'Hint', () => {
-    if (!puzzle || runner.done) return;
-    runner.hint();
-    void record(false);
-  });
+  // First press highlights the piece to move, second press reveals the move with an arrow.
+  const hintLabel = h('span', 'Hint');
+  const hintBtn = h('button.btn.gray.compact', {
+    onclick: () => {
+      if (!puzzle || runner.done) return;
+      runner.hint();
+      setHintLabel();
+      void record(false);
+    },
+  }, icon('hint'), hintLabel);
+  const setHintLabel = () => (hintLabel.textContent = runner.hintLevel === 1 ? 'Reveal Move' : 'Hint');
   const retryBtn = actionBtn('retry', 'Retry', () => {
     runner.retry();
+    setHintLabel();
     hideNext();
   });
   const solutionBtn = actionBtn('book', 'Solution', () => {
     void record(false);
     runner.showSolution(() => {
       status.set('Solution shown', 'info', 'Study it, then try the next one');
-      showDone(true);
+      showDone();
     });
   });
   const analyzeBtn = actionBtn('analyze', 'Analyze', () => {
     if (!puzzle) return;
     navigate(`analyze?fen=${encodeURIComponent(puzzle.fen)}&moves=${puzzle.moves.join(',')}&o=${runner.color}&ply=1`);
   });
-  const nextBtn = h('button.btn.green', { onclick: () => void loadNext() }, 'Next Puzzle');
+  const nextBtn = h('button.btn.green.compact', { onclick: () => void loadNext() }, 'Next Puzzle');
   nextBtn.style.display = 'none';
 
   const { under, bar } = boardLayout(root, { header: header(opts.title, { back: opts.back }), board: board.el, above: opts.rated ? strip : undefined });
-  under.append(status.el, nextBtn, info);
-  bar.append(hintBtn, retryBtn, solutionBtn, analyzeBtn);
+  under.append(status.el, hintBtn, nextBtn, info);
+  bar.append(retryBtn, solutionBtn, analyzeBtn);
 
   async function refreshRating() {
     const p = await profile();
@@ -94,7 +103,8 @@ export async function puzzleTrainer(root: HTMLElement, opts: TrainerOptions) {
     }
   }
 
-  function showDone(_solved: boolean) {
+  function showDone() {
+    hintBtn.style.display = 'none';
     nextBtn.style.display = '';
     if (!puzzle) return;
     info.replaceChildren(
@@ -107,6 +117,8 @@ export async function puzzleTrainer(root: HTMLElement, opts: TrainerOptions) {
 
   function hideNext() {
     nextBtn.style.display = 'none';
+    hintBtn.style.display = '';
+    info.replaceChildren();
   }
 
   async function loadNext() {
@@ -126,6 +138,7 @@ export async function puzzleTrainer(root: HTMLElement, opts: TrainerOptions) {
     }
     recorded = false;
     runner.load(puzzle);
+    setHintLabel();
   }
 
   await refreshRating();

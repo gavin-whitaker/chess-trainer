@@ -18,8 +18,8 @@ export class PuzzleRunner {
   hintsUsed = 0;
   done = false;
   private step = 0;
+  hintLevel = 0;
   private timers: number[] = [];
-  private hintLevel = 0;
 
   constructor(private board: Board, private ev: RunnerEvents = {}) {
     board.setOnMove((m) => this.userMove(m));
@@ -67,7 +67,7 @@ export class PuzzleRunner {
   hint(): void {
     if (!this.puzzle || this.done) return;
     const expected = this.puzzle.moves[this.step];
-    if (!expected) return;
+    if (!expected || this.hintLevel >= 2) return;
     this.hintsUsed++;
     this.hintLevel++;
     if (this.hintLevel === 1) this.board.markSquare(expected.slice(0, 2), 'hint');
@@ -102,8 +102,6 @@ export class PuzzleRunner {
     if (!p || this.done) return;
     const expected = p.moves[this.step];
     const correct = m.uci === expected || this.board.chess.isCheckmate();
-    this.board.clearMarks();
-    this.hintLevel = 0;
     if (!correct) {
       this.mistakes++;
       this.board.setMovable('none');
@@ -118,6 +116,9 @@ export class PuzzleRunner {
       }, 550);
       return;
     }
+    this.board.clearMarks();
+    this.board.clearShapes();
+    this.hintLevel = 0;
     this.step++;
     const finished = this.step >= p.moves.length || this.board.chess.isCheckmate();
     this.board.badge(m.to, finished ? 'best' : 'ok');
