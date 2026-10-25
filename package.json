@@ -1,0 +1,26 @@
+{
+  "name": "chess-trainer",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host",
+    "build": "tsc && vite build",
+    "preview": "vite preview --host",
+    "data": "node scripts/build-data.mjs",
+    "icons": "node scripts/gen-icons.mjs"
+  },
+  "dependencies": {
+    "@lichess-org/chessground": "^10.1.1",
+    "chess.js": "^1.4.0",
+    "idb": "^8.0.4",
+    "stockfish": "^19.0.1"
+  },
+  "devDependencies": {
+    "pngjs": "^7.0.0",
+    "typescript": "^5.8.0",
+    "vite": "^6.4.5",
+    "vite-plugin-pwa": "^1.0.0",
+    "workbox-window": "^7.4.1"
+  }
+}

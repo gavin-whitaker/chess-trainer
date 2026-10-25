@@ -1,0 +1,306 @@
+:root,
+[data-board='green'] {
+  --sq-light: #ebecd0;
+  --sq-dark: #739552;
+  --sq-hl: rgba(255, 255, 51, 0.5);
+  --coord-light: #739552;
+  --coord-dark: #ebecd0;
+}
+
+[data-board='brown'] {
+  --sq-light: #f0d9b5;
+  --sq-dark: #b58863;
+  --coord-light: #b58863;
+  --coord-dark: #f0d9b5;
+}
+
+[data-board='blue'] {
+  --sq-light: #dee3e6;
+  --sq-dark: #8ca2ad;
+  --coord-light: #788a94;
+  --coord-dark: #dee3e6;
+}
+
+[data-board='gray'] {
+  --sq-light: #e0e0e0;
+  --sq-dark: #8c8c8c;
+  --coord-light: #7a7a7a;
+  --coord-dark: #e0e0e0;
+}
+
+.board-wrap {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.board-wrap > .cg-wrap {
+  width: 100%;
+  height: 100%;
+}
+
+cg-board {
+  background: repeating-conic-gradient(var(--sq-dark) 0 25%, var(--sq-light) 0 50%) 0 0 / 25% 25%;
+}
+
+cg-board square.last-move {
+  background-color: var(--sq-hl);
+}
+
+cg-board square.selected {
+  background-color: var(--sq-hl);
+}
+
+cg-board square.move-dest {
+  background: radial-gradient(rgba(0, 0, 0, 0.16) 22%, transparent 23%);
+}
+
+cg-board square.move-dest:hover {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+cg-board square.oc.move-dest {
+  background: radial-gradient(transparent 0%, transparent 79%, rgba(0, 0, 0, 0.16) 80%);
+}
+
+cg-board square.check {
+  background: radial-gradient(ellipse at center, rgba(255, 0, 0, 1) 0%, rgba(231, 0, 0, 1) 25%, rgba(169, 0, 0, 0) 89%, rgba(158, 0, 0, 0) 100%);
+}
+
+cg-board square.hint {
+  background: rgba(129, 182, 76, 0.55);
+  animation: hint-pulse 1.1s ease-in-out infinite;
+}
+
+@keyframes hint-pulse {
+  50% {
+    background: rgba(129, 182, 76, 0.25);
+  }
+}
+
+cg-board square.wrong {
+  background: rgba(250, 65, 45, 0.5);
+}
+
+cg-board square.good {
+  background: rgba(129, 182, 76, 0.5);
+}
+
+/* Coordinates inside the board edge, like Chess.com */
+.cg-wrap coords {
+  font-family: var(--font);
+  font-weight: 700;
+  font-size: clamp(9px, 2.6vmin, 13px);
+  opacity: 1;
+}
+
+.cg-wrap coords.ranks,
+.cg-wrap coords.ranks.left {
+  left: 2px;
+  top: 0;
+  width: auto;
+  align-items: flex-start;
+}
+
+.cg-wrap coords.ranks coord {
+  transform: none;
+  padding-top: 2px;
+}
+
+.cg-wrap coords.files {
+  bottom: 0;
+  left: 0;
+  height: auto;
+  text-transform: lowercase;
+}
+
+.cg-wrap coords.files coord {
+  text-align: right;
+  padding-right: 3px;
+}
+
+.cg-wrap coords coord.coord-light {
+  color: var(--coord-light);
+}
+
+.cg-wrap coords coord.coord-dark {
+  color: var(--coord-dark);
+}
+
+/* Smooth piece motion; dragged piece slightly enlarged */
+cg-board piece.dragging {
+  transform-origin: center;
+  filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.35));
+}
+
+.cg-wrap piece.ghost {
+  opacity: 0.35;
+}
+
+/* Square badges (✓ ✕ ★) */
+.sq-badge {
+  position: absolute;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 14px;
+  font-weight: 900;
+  color: #fff;
+  z-index: 20;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
+  pointer-events: none;
+  animation: badge-in 0.22s cubic-bezier(0.3, 1.6, 0.6, 1);
+}
+
+.sq-badge.ok {
+  background: var(--green);
+}
+
+.sq-badge.best {
+  background: #96bc4b;
+}
+
+.sq-badge.bad {
+  background: var(--red);
+}
+
+.sq-badge.book {
+  background: #a88865;
+  font-size: 12px;
+}
+
+@keyframes badge-in {
+  from {
+    transform: scale(0);
+  }
+}
+
+/* Promotion picker */
+.promo-overlay {
+  position: absolute !important;
+  inset: 0;
+  z-index: 30;
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.promo-col {
+  position: absolute;
+  width: 12.5%;
+  height: 50%;
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border-radius: 4px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+}
+
+.promo-col.from-bottom {
+  flex-direction: column-reverse;
+}
+
+.promo-piece {
+  flex: 1;
+  position: relative;
+  cursor: pointer;
+}
+
+.promo-piece:active {
+  background: #ddd;
+}
+
+.promo-piece piece {
+  position: absolute;
+  inset: 0;
+  width: 100% !important;
+  height: 100% !important;
+  background-size: cover;
+}
+
+/* Static mini board */
+.mini-board {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1;
+  background: repeating-conic-gradient(var(--sq-dark) 0 25%, var(--sq-light) 0 50%) 0 0 / 25% 25%;
+}
+
+.mini-board piece {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 12.5%;
+  height: 12.5%;
+  background-size: cover;
+}
+
+.mini-hl {
+  position: absolute;
+  width: 12.5%;
+  height: 12.5%;
+  background: var(--sq-hl);
+}
+
+/* Eval bar */
+.eval-bar {
+  position: relative;
+  width: 18px;
+  flex-shrink: 0;
+  background: #403d39;
+  overflow: hidden;
+}
+
+.eval-fill {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: #fff;
+  transition: height 0.6s ease;
+}
+
+.eval-bar.flipped .eval-fill {
+  top: 0;
+  bottom: auto;
+}
+
+.eval-label {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 4px;
+  text-align: center;
+  font-size: 9px;
+  font-weight: 800;
+  color: #fff;
+  z-index: 2;
+}
+
+.eval-label.at-bottom {
+  top: auto;
+  bottom: 4px;
+}
+
+.eval-label.on-white {
+  color: #403d39;
+}
+
+/* Merida piece set (from lichess, GPLv2+) */
+[data-pieces='merida'] .cg-wrap piece.pawn.white { background-image: url('/pieces/merida/wP.svg'); }
+[data-pieces='merida'] .cg-wrap piece.knight.white { background-image: url('/pieces/merida/wN.svg'); }
+[data-pieces='merida'] .cg-wrap piece.bishop.white { background-image: url('/pieces/merida/wB.svg'); }
+[data-pieces='merida'] .cg-wrap piece.rook.white { background-image: url('/pieces/merida/wR.svg'); }
+[data-pieces='merida'] .cg-wrap piece.queen.white { background-image: url('/pieces/merida/wQ.svg'); }
+[data-pieces='merida'] .cg-wrap piece.king.white { background-image: url('/pieces/merida/wK.svg'); }
+[data-pieces='merida'] .cg-wrap piece.pawn.black { background-image: url('/pieces/merida/bP.svg'); }
+[data-pieces='merida'] .cg-wrap piece.knight.black { background-image: url('/pieces/merida/bN.svg'); }
+[data-pieces='merida'] .cg-wrap piece.bishop.black { background-image: url('/pieces/merida/bB.svg'); }
+[data-pieces='merida'] .cg-wrap piece.rook.black { background-image: url('/pieces/merida/bR.svg'); }
+[data-pieces='merida'] .cg-wrap piece.queen.black { background-image: url('/pieces/merida/bQ.svg'); }
+[data-pieces='merida'] .cg-wrap piece.king.black { background-image: url('/pieces/merida/bK.svg'); }
