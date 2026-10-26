@@ -5,6 +5,7 @@ import { engine } from '../engine/stockfish';
 import { loadBook, type Book } from '../openings/book';
 import { botLabel, botMove, playUrl } from '../play/bot';
 import { chooseBotLevel } from '../play/levelSheet';
+import { reviewUrl } from '../review/analysis';
 import { h, icon, confirmSheet } from '../ui/dom';
 import { header, boardLayout, actionBtn, StatusPanel } from '../ui/layout';
 import { navigate } from '../router';
@@ -153,7 +154,7 @@ export async function playScreen({ root, params }: ScreenCtx) {
     play(r.outcome === 'win' ? 'solved' : r.outcome === 'loss' ? 'wrong' : 'correct');
     status.set(r.title, r.outcome === 'win' ? 'ok' : r.outcome === 'loss' ? 'bad' : 'info', r.sub);
     result.replaceChildren(
-      h('button.btn.green.compact', { onclick: () => navigate(`analyze?moves=${ucis().join(',')}&o=${side}`) }, 'Review game'),
+      h('button.btn.green.compact', { onclick: () => navigate(reviewUrl(ucis(), side, `Bot ${elo}`, r.outcome), { replace: true }) }, 'Game Review'),
       h('div.btn-row',
         h('button.btn.gray.small', { onclick: () => navigate(playUrl(startMoves, side, elo, back), { replace: true }) }, 'Rematch'),
         h('button.btn.gray.small', { onclick: () => chooseBotLevel((e) => navigate(playUrl(startMoves, side, e, back), { replace: true }), 'Change bot level') }, 'Change level'),

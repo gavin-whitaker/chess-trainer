@@ -235,16 +235,17 @@ export class Board {
   }
 
   // Badge icon (check / x / star) drawn on a square, like Chess.com's move classification.
-  badge(sq: string, kind: 'ok' | 'bad' | 'best' | 'book' | null): void {
+  badge(sq: string, kind: 'ok' | 'bad' | 'best' | 'book' | null, custom?: { symbol: string; color: string }): void {
     this.el.querySelectorAll('.sq-badge').forEach((b) => b.remove());
-    if (!kind) return;
+    if (!kind && !custom) return;
     const file = sq.charCodeAt(0) - 97;
     const rank = +sq[1] - 1;
     const white = this.orientation === 'white';
     const x = white ? file : 7 - file;
     const y = white ? 7 - rank : rank;
-    const symbol = { ok: '✓', bad: '✕', best: '★', book: '📖' }[kind];
-    const b = h(`div.sq-badge.${kind}`, symbol);
+    const symbol = custom ? custom.symbol : { ok: '✓', bad: '✕', best: '★', book: '📖' }[kind!];
+    const b = h(`div.sq-badge${kind ? '.' + kind : ''}`, symbol);
+    if (custom) b.style.background = custom.color;
     b.style.left = `calc(${(x + 1) * 12.5}% - 14px)`;
     b.style.top = `calc(${y * 12.5}% - 10px)`;
     this.el.append(b);

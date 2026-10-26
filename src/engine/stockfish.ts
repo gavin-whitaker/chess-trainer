@@ -76,8 +76,10 @@ class Engine {
     const w = this.worker!;
     w.postMessage(`setoption name MultiPV value ${job.opts.multipv ?? 1}`);
     w.postMessage(`position fen ${job.fen}`);
-    if (job.opts.movetime) w.postMessage(`go movetime ${job.opts.movetime}`);
-    else w.postMessage(`go depth ${job.opts.depth ?? 18}`);
+    const { depth, movetime } = job.opts;
+    if (depth && movetime) w.postMessage(`go depth ${depth} movetime ${movetime}`);
+    else if (movetime) w.postMessage(`go movetime ${movetime}`);
+    else w.postMessage(`go depth ${depth ?? 18}`);
   }
 
   private handle(line: string): void {
