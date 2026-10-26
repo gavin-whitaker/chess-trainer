@@ -309,6 +309,41 @@ body.full .tabbar {
   height: 18px;
 }
 
+.level-label {
+  text-align: center;
+  font-size: 18px;
+  margin: 4px 0 12px;
+  color: var(--text-2);
+}
+
+.level-label b {
+  font-size: 28px;
+  font-weight: 900;
+  color: var(--text);
+}
+
+.level-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+.level-chip {
+  min-height: 42px;
+  border-radius: 8px;
+  background: var(--panel-2);
+  font-weight: 800;
+  font-size: 15px;
+  color: var(--text);
+  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.3);
+}
+
+.level-chip.active {
+  background: var(--green);
+  color: #fff;
+  box-shadow: 0 3px 0 var(--green-dark);
+}
+
 .btn:disabled {
   opacity: 0.5;
 }

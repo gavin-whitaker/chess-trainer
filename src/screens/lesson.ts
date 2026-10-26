@@ -14,6 +14,8 @@ import { header, boardLayout, actionBtn } from '../ui/layout';
 import { navigate } from '../router';
 import type { ScreenCtx } from '../router';
 import { moveText, startRandomLesson } from './learn';
+import { playUrl } from '../play/bot';
+import { chooseBotLevel } from '../play/levelSheet';
 
 type Phase = 'learn' | 'practice' | 'beyond' | 'done';
 
@@ -123,7 +125,7 @@ export async function lessonScreen({ root, params }: ScreenCtx) {
         play('correct');
         say(`That’s the main line of the <b>${line.name}</b>. Let’s practice it.`);
         later(() => start('practice'), 1600);
-      } else startBeyond();
+      } else void practiceDone();
       return;
     }
     const uci = line.ucis[ply];
@@ -201,12 +203,33 @@ export async function lessonScreen({ root, params }: ScreenCtx) {
     }, 600);
   }
 
+  function practiceDone() {
+    board.setMovable('none');
+    resetHint();
+    play('correct');
+    void saveLesson(line.idx, stars(), side);
+    say(`Practice complete! <span class="c-gold">${starsText(stars())}</span> Keep going with me, or play a bot from this position.`);
+    extra.replaceChildren(
+      h('button.btn.green.compact', { onclick: () => playBot() }, icon('play'), 'Play a bot from here'),
+      h('button.btn.gray.compact', { onclick: () => startBeyond() }, 'Keep going with the coach'),
+    );
+  }
+
+  function stars() {
+    return mistakes === 0 ? 3 : mistakes <= 2 ? 2 : 1;
+  }
+
+  function playBot() {
+    const moves = board.history().map((m) => m.from + m.to + (m.promotion || ''));
+    chooseBotLevel((elo) => navigate(playUrl(moves, side, elo)));
+  }
+
   // After the book line: keep playing a few moves against popular replies, checked by the engine.
   function startBeyond() {
+    extra.replaceChildren();
     setPhase('beyond');
     beyondCount = 0;
-    play('correct');
-    say(`You know the main line! Now let’s play on. I’ll reply like a real opponent and check that your moves keep a good position.`);
+    say(`Now let’s play on. I’ll reply like a real opponent and check that your moves keep a good position.`);
     later(beyondStep, 1400);
   }
 
@@ -303,10 +326,8 @@ export async function lessonScreen({ root, params }: ScreenCtx) {
   async function finish() {
     setPhase('done');
     board.setMovable('none');
-    const stars = mistakes === 0 ? 3 : mistakes <= 2 ? 2 : 1;
-    await saveLesson(line.idx, stars, side);
     play('solved');
-    say(`Lesson complete! <span class="c-gold">${starsText(stars)}</span> ${mistakes ? `${mistakes} mistake${mistakes > 1 ? 's' : ''} in practice.` : 'Perfect practice run.'}`);
+    say(`Lesson complete! <span class="c-gold">${starsText(stars())}</span> ${mistakes ? `${mistakes} mistake${mistakes > 1 ? 's' : ''} in practice.` : 'Perfect practice run.'}`);
     const evalEl = h('div.engine-meta', h('span', 'Evaluating final position…'));
     const plans = plansFor(line.family, side);
     const familyLines = book.families.get(line.family) || [];
@@ -317,7 +338,8 @@ export async function lessonScreen({ root, params }: ScreenCtx) {
         h('div', { style: { fontWeight: '800', marginTop: '8px' } }, 'Plans from here'),
         h('ul.plan-list', plans.map((p) => h('li', p))),
       ),
-      h('button.btn.green', { onclick: () => addToRep() }, 'Add to my repertoire'),
+      h('button.btn.green.compact', { onclick: () => playBot() }, icon('play'), 'Play a bot from here'),
+      h('button.btn.gray.compact', { onclick: () => addToRep() }, 'Add to my repertoire'),
       h('div.btn-row',
         h('button.btn.gray.small', { onclick: () => start('practice') }, 'Practice again'),
         nextLine ? h('button.btn.gray.small', { onclick: () => navigate(`learn/lesson?i=${nextLine.idx}&side=${side}`, { replace: true }) }, 'Next variation') : h('button.btn.gray.small', { onclick: () => navigate(`learn/explore?moves=${board.history().map((m) => m.from + m.to + (m.promotion || '')).join(',')}&o=${side}`) }, 'Explore'),

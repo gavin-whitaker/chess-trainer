@@ -31,6 +31,7 @@ route('learn/explore', { tab: 'learn', full: true, screen: async () => (await im
 route('learn/lesson', { tab: 'learn', full: true, screen: async () => (await import('./screens/lesson')).lessonScreen });
 route('learn/repertoire', { tab: 'learn', screen: async () => (await import('./screens/repertoire')).repertoireScreen });
 route('learn/drill', { tab: 'learn', full: true, screen: async () => (await import('./screens/repertoire')).drillScreen });
+route('play', { tab: 'learn', full: true, screen: async () => (await import('./screens/play')).playScreen });
 route('analyze', { tab: 'analyze', full: true, screen: async () => (await import('./screens/analyze')).analyzeScreen });
 route('profile', { tab: 'profile', screen: async () => (await import('./screens/profile')).profileScreen });
 route('settings', { tab: 'profile', screen: async () => (await import('./screens/settings')).settingsScreen });
