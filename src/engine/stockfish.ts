@@ -21,9 +21,10 @@ interface Job {
   resolve: (r: { best: string; lines: EngineLine[] }) => void;
 }
 
-// Single shared Stockfish worker (lite, single-threaded WASM: runs on iOS without cross-origin isolation).
-class Engine {
+// Stockfish worker (lite, single-threaded WASM: runs on iOS without cross-origin isolation).
+export class Engine {
   private worker: Worker | null = null;
+  constructor(private hashMb = 32) {}
   private ready: Promise<void> | null = null;
   private job: Job | null = null;
   private queued: Job | null = null;
@@ -40,7 +41,7 @@ class Engine {
         else this.handle(line);
       };
       this.worker.postMessage('uci');
-      this.worker.postMessage('setoption name Hash value 32');
+      this.worker.postMessage(`setoption name Hash value ${this.hashMb}`);
     });
     return this.ready;
   }

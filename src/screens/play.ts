@@ -5,7 +5,7 @@ import { engine } from '../engine/stockfish';
 import { loadBook, type Book } from '../openings/book';
 import { botLabel, botMove, playUrl } from '../play/bot';
 import { chooseBotLevel } from '../play/levelSheet';
-import { reviewUrl } from '../review/analysis';
+import { preAnalyze, reviewUrl } from '../review/analysis';
 import { h, icon, confirmSheet } from '../ui/dom';
 import { header, boardLayout, actionBtn, StatusPanel } from '../ui/layout';
 import { navigate } from '../router';
@@ -97,6 +97,7 @@ export async function playScreen({ root, params }: ScreenCtx) {
   }
 
   function advance() {
+    preAnalyze(board.fen);
     renderMoves();
     const r = gameResult();
     if (r) return end(r);
@@ -176,8 +177,10 @@ export async function playScreen({ root, params }: ScreenCtx) {
   }
 
   const replay = new Chess();
+  preAnalyze(replay.fen());
   for (const uci of startMoves.slice(0, startLen)) {
     replay.move(parseUci(uci));
+    preAnalyze(replay.fen());
     const named = book.lookup(replay.fen()).opening;
     if (named) openingName = named.name;
   }

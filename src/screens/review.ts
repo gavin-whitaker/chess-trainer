@@ -74,7 +74,7 @@ export async function reviewScreen({ root, params }: ScreenCtx) {
     loadBook(),
     evaluateGame(ucis, (done, total) => {
       progressFill.style.width = `${Math.round((done / total) * 100)}%`;
-      progressText.textContent = done < total ? `Analyzing position ${done + 1} of ${total}` : 'Putting it together…';
+      progressText.textContent = done < total ? `Analyzed ${done} of ${total} positions` : 'Putting it together…';
     }, () => alive),
   ]);
   if (!alive || !evaluated) return;

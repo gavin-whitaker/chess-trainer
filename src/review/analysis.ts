@@ -1,6 +1,6 @@
 import { Chess, type Move, type Square } from 'chess.js';
 import { parseUci } from '../board/Board';
-import { engine } from '../engine/stockfish';
+import { Engine } from '../engine/stockfish';
 import { kvGet, kvSet } from '../db';
 import type { Book } from '../openings/book';
 
@@ -80,15 +80,17 @@ function moveAccuracy(loss: number): number {
 }
 
 // Lichess-style game accuracy: blend of the mean and the harmonic mean, so a few blunders hurt.
+// Book and forced moves take no skill, so they don't count.
 export function gameAccuracy(moves: MoveReview[]): number {
-  if (!moves.length) return 0;
-  const accs = moves.map((m) => Math.max(1, m.accuracy));
+  const counted = moves.filter((m) => m.cls !== 'book' && m.cls !== 'forced');
+  if (!counted.length) return moves.length ? 100 : 0;
+  const accs = counted.map((m) => Math.max(1, m.accuracy));
   const mean = accs.reduce((s, a) => s + a, 0) / accs.length;
   const harmonic = accs.length / accs.reduce((s, a) => s + 1 / a, 0);
   return Math.round(((mean + harmonic) / 2) * 10) / 10;
 }
 
-const RATING_CURVE: [number, number][] = [[0, 100], [40, 400], [55, 700], [65, 1000], [72, 1300], [78, 1600], [84, 1900], [89, 2200], [93, 2500], [96, 2800], [100, 3000]];
+const RATING_CURVE: [number, number][] = [[0, 100], [50, 250], [60, 400], [70, 700], [75, 900], [80, 1150], [85, 1500], [88, 1800], [91, 2100], [94, 2450], [97, 2800], [100, 3000]];
 
 export function estimatedRating(accuracy: number): number {
   for (let i = 1; i < RATING_CURVE.length; i++) {
@@ -105,18 +107,45 @@ function terminalEval(c: Chess): PosEval | null {
   return null;
 }
 
-async function evalPosition(fen: string): Promise<PosEval> {
+// Review analysis runs on its own engines so it never interrupts the bot or the analysis board,
+// and positions are queued while the game is still being played.
+const POOL_SIZE = 2;
+const pool: { engine: Engine; chain: Promise<unknown>; pending: number }[] = [];
+const memo = new Map<string, Promise<PosEval>>();
+
+function idleEngine() {
+  if (!pool.length) for (let i = 0; i < POOL_SIZE; i++) pool.push({ engine: new Engine(16), chain: Promise.resolve(), pending: 0 });
+  return pool.reduce((a, b) => (b.pending < a.pending ? b : a));
+}
+
+function evalPosition(fen: string): Promise<PosEval> {
+  const key = fen.split(' ').slice(0, 4).join(' ');
+  const known = memo.get(key);
+  if (known) return known;
   const t = terminalEval(new Chess(fen));
-  if (t) return t;
-  const r = await engine.analyze(fen, { depth: 16, movetime: 700, multipv: 2 });
-  const [a, b] = r.lines;
-  return {
-    cp: a?.cp,
-    mate: a?.mate,
-    best: r.best || a?.pv[0] || '',
-    pv: a?.pv.slice(0, 8) ?? [],
-    second: b?.pv[0] ? { cp: b.cp, mate: b.mate, uci: b.pv[0] } : undefined,
-  };
+  if (t) return Promise.resolve(t);
+  const slot = idleEngine();
+  slot.pending++;
+  const job = slot.chain.then(async () => {
+    const r = await slot.engine.analyze(fen, { depth: 16, movetime: 700, multipv: 2 });
+    slot.pending--;
+    const [a, b] = r.lines;
+    return {
+      cp: a?.cp,
+      mate: a?.mate,
+      best: r.best || a?.pv[0] || '',
+      pv: a?.pv.slice(0, 8) ?? [],
+      second: b?.pv[0] ? { cp: b.cp, mate: b.mate, uci: b.pv[0] } : undefined,
+    };
+  });
+  slot.chain = job;
+  memo.set(key, job);
+  return job;
+}
+
+// Start analyzing a position in the background (called after each move of a game).
+export function preAnalyze(fen: string): void {
+  void evalPosition(fen);
 }
 
 // Engine evals for every position of the game, cached so reopening a review is instant.
@@ -130,13 +159,13 @@ export async function evaluateGame(ucis: string[], onProgress: (done: number, to
   const key = ucis.join(',');
   const cache = await kvGet<Record<string, PosEval[]>>('reviews', {});
   if (cache[key]?.length === fens.length) return { fens, evals: cache[key] };
-  const evals: PosEval[] = [];
-  for (let i = 0; i < fens.length; i++) {
-    if (!isAlive()) return null;
-    onProgress(i, fens.length);
-    evals.push(await evalPosition(fens[i]));
-  }
-  onProgress(fens.length, fens.length);
+  let done = 0;
+  onProgress(0, fens.length);
+  const evals = await Promise.all(fens.map((f) => evalPosition(f).then((e) => {
+    if (isAlive()) onProgress(++done, fens.length);
+    return e;
+  })));
+  if (!isAlive()) return null;
   const keys = Object.keys(cache);
   if (keys.length >= 10) delete cache[keys[0]];
   cache[key] = evals;

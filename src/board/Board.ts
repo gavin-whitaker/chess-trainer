@@ -43,6 +43,32 @@ const BRUSHES = {
   ghost: { key: 'gh', color: '#ffffff', opacity: 0.55, lineWidth: 9 },
 };
 
+// Knight moves get an L-shaped arrow (long leg first, then the turn), like Chess.com.
+// Drawn as a custom SVG anchored on the origin square, where one square is 100 units.
+function knightArrow(s: DrawShape, orientation: Color): DrawShape {
+  const brush = s.brush ? BRUSHES[s.brush as keyof typeof BRUSHES] : undefined;
+  if (!s.dest || !brush) return s;
+  const sign = orientation === 'white' ? 1 : -1;
+  const dx = (s.dest.charCodeAt(0) - s.orig.charCodeAt(0)) * sign;
+  const dy = -(s.dest.charCodeAt(1) - s.orig.charCodeAt(1)) * sign;
+  if (Math.abs(dx * dy) !== 2) return s;
+  const width = (brush.lineWidth / 64) * 100;
+  const head = width * 3;
+  const tip = [50 + dx * 100, 50 + dy * 100];
+  const corner = Math.abs(dx) === 2 ? [tip[0], 50] : [50, tip[1]];
+  const ux = Math.sign(tip[0] - corner[0]);
+  const uy = Math.sign(tip[1] - corner[1]);
+  const base = [tip[0] - ux * head, tip[1] - uy * head];
+  const half = width * 2;
+  const points = [tip, [base[0] - uy * half, base[1] + ux * half], [base[0] + uy * half, base[1] - ux * half]];
+  const opacity = brush.opacity * 0.6;
+  const html =
+    `<g opacity="${opacity}">` +
+    `<path d="M50 50 L${corner[0]} ${corner[1]} L${base[0] + ux} ${base[1] + uy}" fill="none" stroke="${brush.color}" stroke-width="${width}" stroke-linejoin="miter" />` +
+    `<polygon points="${points.map((p) => p.join(',')).join(' ')}" fill="${brush.color}" /></g>`;
+  return { orig: s.orig, customSvg: { html } };
+}
+
 export function uciOf(m: { from: string; to: string; promotion?: string }): string {
   return m.from + m.to + (m.promotion || '');
 }
@@ -154,11 +180,12 @@ export class Board {
   }
 
   setOrientation(c: Color): void {
-    if (this.cg.state.orientation !== c) this.cg.toggleOrientation();
+    if (this.cg.state.orientation !== c) this.flip();
   }
 
   flip(): void {
     this.cg.toggleOrientation();
+    this.cg.setAutoShapes(this.shapes.map((s) => knightArrow(s, this.orientation)));
   }
 
   setMovable(m: Color | 'both' | 'none'): void {
@@ -209,7 +236,7 @@ export class Board {
 
   setShapes(shapes: DrawShape[]): void {
     this.shapes = shapes;
-    this.cg.setAutoShapes(shapes);
+    this.cg.setAutoShapes(shapes.map((s) => knightArrow(s, this.orientation)));
   }
 
   arrow(uci: string, brush = 'orange'): void {
