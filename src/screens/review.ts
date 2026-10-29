@@ -46,11 +46,13 @@ export async function reviewScreen({ root, params }: ScreenCtx) {
     evalBar: evalBar.el,
   });
   under.append(h('div.coach', coachIcon, h('div', { style: { flex: '1' } }, bubble, coachActions)), graphSlot, movesEl);
+  bar.classList.add('review-bar');
   bar.append(
     actionBtn('book', 'Summary', () => showSummary()),
     actionBtn('first', 'Start', () => goto(0)),
-    actionBtn('back', 'Back', () => goto(cursor - 1)),
-    actionBtn('next', 'Next', () => goto(cursor + 1), 'primary'),
+    actionBtn('back', 'Back', tapOnce(() => goto(cursor - 1))),
+    actionBtn('next', 'Move', tapOnce(() => goto(cursor + 1))),
+    h('button.action.next-key', { onclick: tapOnce(() => gotoNextKey()) }, h('span', 'Next'), icon('last')),
   );
   const boardScreen = root.querySelector('.board-screen') as HTMLElement;
 
@@ -115,8 +117,17 @@ export async function reviewScreen({ root, params }: ScreenCtx) {
     return lead + body + extra;
   }
 
+  function isKeyMoment(m: MoveReview): boolean {
+    return m.color === me ? ['mistake', 'miss', 'blunder', 'brilliant', 'great'].includes(m.cls) : ['blunder', 'brilliant'].includes(m.cls);
+  }
+
+  function gotoNextKey() {
+    const k = moves.find((m) => m.ply >= cursor && isKeyMoment(m));
+    goto(k ? k.ply + 1 : review.fens.length - 1);
+  }
+
   function renderSummary() {
-    const keyMoments = moves.filter((m) => (m.color === me && ['mistake', 'miss', 'blunder', 'brilliant', 'great'].includes(m.cls)) || (m.color !== me && ['blunder', 'brilliant'].includes(m.cls)));
+    const keyMoments = moves.filter(isKeyMoment);
     const practice = mine.filter((m) => ['mistake', 'miss', 'blunder'].includes(m.cls));
     const sideBox = (c: 'white' | 'black') => h(`span.side-box.${c}`);
     const phaseRow = (label: string, phase: MoveReview['phase']) => {
@@ -217,7 +228,7 @@ export async function reviewScreen({ root, params }: ScreenCtx) {
       board.badge('a1', null);
       coachIcon.replaceChildren(icon('learn'));
       coachIcon.style.background = '';
-      setBubble('Let’s go through your game from the start. Tap <b>Next</b> to step through each move.');
+      setBubble('Let’s go through your game. Tap <b>Next</b> to jump to the key moments, or <b>Move</b> to go one move at a time.');
       return;
     }
     const meta = CLS_META[m.cls];
@@ -378,6 +389,17 @@ export async function reviewScreen({ root, params }: ScreenCtx) {
     alive = false;
     engine.stop();
     board.destroy();
+  };
+}
+
+// Phones sometimes deliver one tap as two clicks; drop the duplicate so a step never skips a move.
+function tapOnce(fn: () => void): () => void {
+  let last = 0;
+  return () => {
+    const now = performance.now();
+    if (now - last < 150) return;
+    last = now;
+    fn();
   };
 }
 
