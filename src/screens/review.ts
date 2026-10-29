@@ -45,7 +45,7 @@ export async function reviewScreen({ root, params }: ScreenCtx) {
     board: board.el,
     evalBar: evalBar.el,
   });
-  under.append(h('div.coach', coachIcon, h('div', { style: { flex: '1' } }, bubble, coachActions)), graphSlot, movesEl);
+  under.append(h('div.coach', coachIcon, h('div', { style: { flex: '1' } }, bubble, coachActions)), graphSlot, bar, movesEl);
   bar.classList.add('review-bar');
   bar.append(
     actionBtn('book', 'Summary', () => showSummary()),

@@ -870,7 +870,10 @@ body.full .tabbar {
 
 .action-bar.review-bar {
   align-items: center;
-  padding-bottom: calc(16px + var(--safe-bottom));
+  padding: 4px;
+  margin-bottom: 10px;
+  border: none;
+  border-radius: var(--radius);
 }
 
 .action.next-key {
