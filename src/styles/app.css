@@ -870,10 +870,14 @@ body.full .tabbar {
 
 .action-bar.review-bar {
   align-items: center;
-  padding: 4px;
-  margin-bottom: 10px;
-  border: none;
-  border-radius: var(--radius);
+  gap: 2px;
+  padding: 6px 8px;
+  border-top: none;
+  border-bottom: 1px solid var(--line);
+}
+
+.review-bar .action {
+  min-width: 0;
 }
 
 .action.next-key {
@@ -1694,4 +1698,53 @@ body.full .tabbar {
 .review-moves .mv {
   display: inline-flex;
   align-items: center;
+}
+
+/* Review tab: import a game */
+.import-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.import-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+}
+
+.pgn-input {
+  resize: vertical;
+  min-height: 96px;
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 13px;
+}
+
+.side-pick {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.side-btn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px;
+  border-radius: var(--radius);
+  background: var(--panel-2);
+  font-weight: 700;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
+.side-btn:active {
+  background: var(--line);
+}
+
+.side-btn .side-box {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
 }

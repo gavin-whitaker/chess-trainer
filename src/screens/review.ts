@@ -45,8 +45,9 @@ export async function reviewScreen({ root, params }: ScreenCtx) {
     board: board.el,
     evalBar: evalBar.el,
   });
-  under.append(h('div.coach', coachIcon, h('div', { style: { flex: '1' } }, bubble, coachActions)), graphSlot, bar, movesEl);
+  under.append(h('div.coach', coachIcon, h('div', { style: { flex: '1' } }, bubble, coachActions)), graphSlot, movesEl);
   bar.classList.add('review-bar');
+  root.querySelector('.board-area')!.after(bar);
   bar.append(
     actionBtn('book', 'Summary', () => showSummary()),
     actionBtn('first', 'Start', () => goto(0)),
@@ -142,7 +143,7 @@ export async function reviewScreen({ root, params }: ScreenCtx) {
     playTarget = target;
     const delay = Math.max(150, Math.min(600, 4000 / (target - from)));
     for (let ply = from + 1; ply <= target; ply++) {
-      show(ply);
+      show(ply, ply < target);
       if (ply === target) break;
       await new Promise((r) => window.setTimeout(r, delay));
       if (!alive || token !== playToken) return;
@@ -233,7 +234,7 @@ export async function reviewScreen({ root, params }: ScreenCtx) {
     playTarget = null;
   }
 
-  function show(ply: number) {
+  function show(ply: number, quiet = false) {
     if (mode === 'retry') exitRetry();
     ply = Math.max(0, Math.min(review.fens.length - 1, ply));
     if (ply === cursor) return;
@@ -244,10 +245,10 @@ export async function reviewScreen({ root, params }: ScreenCtx) {
       board.setPosition(review.fens[ply - 1], ply > 1 ? moves[ply - 2].uci : undefined);
       board.play(m.uci);
     } else board.setPosition(review.fens[ply], m?.uci);
-    showMove();
+    showMove(quiet);
   }
 
-  function showMove() {
+  function showMove(quiet = false) {
     const m = moves[cursor - 1];
     board.clearShapes();
     board.clearMarks();
@@ -264,6 +265,13 @@ export async function reviewScreen({ root, params }: ScreenCtx) {
       coachIcon.replaceChildren(icon('learn'));
       coachIcon.style.background = '';
       setBubble('Let’s go through your game. Tap <b>Next</b> to jump to the key moments, or <b>Move</b> to go one move at a time.');
+      return;
+    }
+    if (quiet) {
+      board.badge('a1', null);
+      coachIcon.replaceChildren(icon('next'));
+      coachIcon.style.background = '';
+      setBubble(`<span class="muted">Playing to the next key move…</span> ${Math.floor(m.ply / 2) + 1}${m.color === 'w' ? '.' : '…'} <b>${m.san}</b>`);
       return;
     }
     const meta = CLS_META[m.cls];

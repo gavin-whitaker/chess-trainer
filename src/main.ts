@@ -32,8 +32,9 @@ route('learn/lesson', { tab: 'learn', full: true, screen: async () => (await imp
 route('learn/repertoire', { tab: 'learn', screen: async () => (await import('./screens/repertoire')).repertoireScreen });
 route('learn/drill', { tab: 'learn', full: true, screen: async () => (await import('./screens/repertoire')).drillScreen });
 route('play', { tab: 'learn', full: true, screen: async () => (await import('./screens/play')).playScreen });
-route('review', { tab: 'learn', full: true, screen: async () => (await import('./screens/review')).reviewScreen });
-route('analyze', { tab: 'analyze', full: true, screen: async () => (await import('./screens/analyze')).analyzeScreen });
+route('review', { tab: 'reviews', full: true, screen: async () => (await import('./screens/review')).reviewScreen });
+route('reviews', { tab: 'reviews', screen: async () => (await import('./screens/reviewHub')).reviewHub });
+route('analyze', { tab: 'reviews', full: true, screen: async () => (await import('./screens/analyze')).analyzeScreen });
 route('profile', { tab: 'profile', screen: async () => (await import('./screens/profile')).profileScreen });
 route('settings', { tab: 'profile', screen: async () => (await import('./screens/settings')).settingsScreen });
 
@@ -41,7 +42,7 @@ const TABS = [
   { id: 'home', label: 'Home', icon: 'home' as const },
   { id: 'puzzles', label: 'Puzzles', icon: 'puzzle' as const },
   { id: 'learn', label: 'Learn', icon: 'learn' as const },
-  { id: 'analyze', label: 'Analyze', icon: 'analyze' as const },
+  { id: 'reviews', label: 'Review', icon: 'star' as const },
   { id: 'profile', label: 'Profile', icon: 'profile' as const },
 ];
 

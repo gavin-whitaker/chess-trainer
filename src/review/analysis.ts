@@ -6,8 +6,8 @@ import type { Book } from '../openings/book';
 
 export type Outcome = 'win' | 'loss' | 'draw';
 
-export function reviewUrl(ucis: string[], side: 'white' | 'black', opponent: string, result: Outcome): string {
-  return `review?moves=${ucis.join(',')}&side=${side}&opp=${encodeURIComponent(opponent)}&result=${result}`;
+export function reviewUrl(ucis: string[], side: 'white' | 'black', opponent: string, result: Outcome | null): string {
+  return `review?moves=${ucis.join(',')}&side=${side}&opp=${encodeURIComponent(opponent)}${result ? `&result=${result}` : ''}`;
 }
 
 export type Cls = 'brilliant' | 'great' | 'best' | 'excellent' | 'good' | 'book' | 'forced' | 'inaccuracy' | 'mistake' | 'miss' | 'blunder';
@@ -253,7 +253,9 @@ export function reviewGame(fens: string[], evals: PosEval[], ucis: string[], boo
     const loss = Math.max(0, wpBefore - wpAfter);
     const bestUci = eb.best;
     const bestSan = bestUci ? sanOf(fens[i], bestUci) : '';
-    const isBest = ucis[i] === bestUci || loss < 0.6;
+    // Engine lines at review depth are a little noisy, so near-equal alternatives also count as best.
+    const secondEqual = eb.second?.uci === ucis[i] && wpBefore - wpFor(eb.second, color) < 1.5;
+    const isBest = ucis[i] === bestUci || loss < 1 || secondEqual;
     const bookMove = inBook && book.lookup(fens[i]).next.some((b) => b.uci === ucis[i]);
     if (!bookMove) inBook = false;
     const prev = out[i - 1];
