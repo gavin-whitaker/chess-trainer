@@ -4,8 +4,10 @@ import { play } from '../board/feedback';
 import { EvalBar } from '../engine/EvalBar';
 import { engine } from '../engine/stockfish';
 import { loadBook } from '../openings/book';
+import { depthSelect } from '../review/depthSelect';
+import { navigate } from '../router';
 import {
-  BAD, CLS_META, CLS_ORDER, evaluateGame, estimatedRating, forBot, gameAccuracy, phaseAccuracy, reviewGame, wpWhite,
+  BAD, CLS_META, CLS_ORDER, DEPTHS, evaluateGame, estimatedRating, forBot, gameAccuracy, phaseAccuracy, refineGame, reviewDepth, reviewGame, wpWhite,
   type Cls, type GameReview, type MoveReview, type Outcome,
 } from '../review/analysis';
 import { EvalGraph } from '../review/graph';
@@ -30,7 +32,15 @@ export async function reviewScreen({ root, params }: ScreenCtx) {
   const opp = params.get('opp') || 'Opponent';
   const oppHtml = escapeHtml(opp);
   const result = (params.get('result') as Outcome) || null;
+  const depth = DEPTHS.includes(Number(params.get('depth'))) ? Number(params.get('depth')) : reviewDepth();
   let alive = true;
+  // The router only gets our cleanup after loading finishes, so also stop once the screen is gone.
+  const isAlive = () => alive && root.isConnected;
+  const changeDepth = (d: number) => {
+    const p = new URLSearchParams(params);
+    p.set('depth', String(d));
+    navigate(`review?${p.toString()}`, { replace: true });
+  };
 
   // ---------- Board view (move-by-move review) ----------
   const board = new Board({ orientation: side, movable: 'none' });
@@ -71,23 +81,27 @@ export async function reviewScreen({ root, params }: ScreenCtx) {
       h('div.coach', h('div.coach-avatar', icon('learn')), h('div.coach-bubble', 'Give me a moment, I’m going through every move of your game…')),
       h('div.progress', { style: { marginTop: '18px' } }, progressFill),
       progressText,
+      depthSelect(ucis.length + 1, changeDepth, depth),
     ),
   );
 
-  const [book, evaluated] = await Promise.all([
+  const [book, game] = await Promise.all([
     loadBook(),
-    evaluateGame(ucis, (done, total) => {
+    evaluateGame(ucis, depth, (done, total) => {
       progressFill.style.width = `${Math.round((done / total) * 100)}%`;
-      progressText.textContent = done < total ? `Analyzed ${done} of ${total} positions` : 'Putting it together…';
-    }, () => alive),
+      progressText.textContent = done < total ? `First look: ${done} of ${total} positions` : 'Putting it together…';
+    }, isAlive),
   ]);
-  if (!alive || !evaluated) return;
-  const moves = reviewGame(evaluated.fens, evaluated.evals, ucis, book);
-  const review: GameReview = { ...evaluated, moves };
-  const mine = moves.filter((m) => m.color === me);
-  const theirs = moves.filter((m) => m.color !== me);
-  const myAcc = gameAccuracy(mine);
-  const theirAcc = gameAccuracy(theirs);
+  if (!isAlive() || !game) return;
+  let moves = reviewGame(game.fens, game.evals, ucis, book);
+  const review: GameReview = { fens: game.fens, evals: game.evals, moves };
+  let mine = moves.filter((m) => m.color === me);
+  let theirs = moves.filter((m) => m.color !== me);
+  let myAcc = gameAccuracy(mine);
+  let theirAcc = gameAccuracy(theirs);
+  let refining = game.deep.includes(false);
+  let refined = game.deep.filter(Boolean).length;
+  const refineStatus = h('div.refine-status');
 
   let cursor = 0;
   let mode: 'browse' | 'retry' = 'browse';
@@ -98,13 +112,57 @@ export async function reviewScreen({ root, params }: ScreenCtx) {
   let playToken = 0;
   let playTarget: number | null = null;
 
-  const bigGraph = new EvalGraph(review.evals, moves, (ply) => openAt(ply));
-  const smallGraph = new EvalGraph(review.evals, moves, (ply) => goto(ply), 46);
+  let bigGraph = new EvalGraph(review.evals, moves, (ply) => openAt(ply));
+  let smallGraph = new EvalGraph(review.evals, moves, (ply) => goto(ply), 46);
   graphSlot.append(smallGraph.el);
+  updateRefineStatus();
   renderSummary();
   renderMoveList();
 
   board.setOnMove((m) => void onRetryMove(m));
+
+  if (refining) {
+    void refineGame(ucis, game, depth, () => Math.max(cursor, 0), onRefined, isAlive).then(() => {
+      if (!isAlive()) return;
+      refining = false;
+      updateRefineStatus();
+      bigGraph = new EvalGraph(review.evals, moves, (ply) => openAt(ply));
+      const top = summary.scrollTop;
+      renderSummary();
+      summary.scrollTop = top;
+    });
+  }
+
+  // A move is only labelled once both positions around it have the full-depth result.
+  function isReady(ply: number): boolean {
+    return ply <= 0 || (game!.deep[ply - 1] && game!.deep[ply]);
+  }
+
+  function onRefined(i: number) {
+    refined++;
+    moves = reviewGame(game!.fens, game!.evals, ucis, book);
+    review.moves = moves;
+    mine = moves.filter((m) => m.color === me);
+    theirs = moves.filter((m) => m.color !== me);
+    myAcc = gameAccuracy(mine);
+    theirAcc = gameAccuracy(theirs);
+    updateRefineStatus();
+    renderMoveList();
+    markCurrent();
+    const s = new EvalGraph(review.evals, moves, (ply) => goto(ply), 46);
+    smallGraph.el.replaceWith(s.el);
+    smallGraph = s;
+    smallGraph.set(Math.max(cursor, 0));
+    const onBoard = boardScreen.style.display !== 'none';
+    if (!onBoard || mode !== 'browse' || playTarget !== null) return;
+    if (i === cursor) evalBar.update(review.evals[cursor]);
+    if ((i === cursor || i === cursor - 1) && isReady(cursor)) showMove();
+  }
+
+  function updateRefineStatus() {
+    refineStatus.textContent = refining ? `Taking a closer look at depth ${depth}… ${refined} of ${game!.fens.length}` : '';
+    refineStatus.style.display = refining ? '' : 'none';
+  }
 
   function count(list: MoveReview[], cls: Cls) {
     return list.filter((m) => m.cls === cls).length;
@@ -172,6 +230,7 @@ export async function reviewScreen({ root, params }: ScreenCtx) {
           h('div.acc-card', h('div.acc-who', sideBox(side), 'You'), h('div.acc-num.me', myAcc.toFixed(1)), h('div.acc-lbl', 'Accuracy')),
           h('div.acc-card', h('div.acc-who', sideBox(side === 'white' ? 'black' : 'white'), opp), h('div.acc-num', theirAcc.toFixed(1)), h('div.acc-lbl', 'Accuracy')),
         ),
+        refineStatus,
         h('div.card.cls-table',
           ...CLS_ORDER.map((c) => {
             const a = count(mine, c);
@@ -205,6 +264,7 @@ export async function reviewScreen({ root, params }: ScreenCtx) {
           h('button.btn.green', { onclick: () => openAt(0) }, 'Start Review'),
           practice.length ? h('button.btn.gray.compact', { onclick: () => startPractice(practice) }, icon('retry'), `Retry your mistakes (${practice.length})`) : null,
         ),
+        depthSelect(ucis.length + 1, changeDepth, depth),
       ),
     );
   }
@@ -249,6 +309,13 @@ export async function reviewScreen({ root, params }: ScreenCtx) {
     showMove(quiet);
   }
 
+  function markCurrent() {
+    movesEl.querySelectorAll('.cur').forEach((e) => e.classList.remove('cur'));
+    const cur = movesEl.querySelector<HTMLElement>(`[data-ply="${cursor}"]`);
+    cur?.classList.add('cur');
+    if (cur) movesEl.scrollTop = Math.max(0, cur.offsetTop - movesEl.clientHeight / 2);
+  }
+
   function showMove(quiet = false) {
     const m = moves[cursor - 1];
     board.clearShapes();
@@ -256,10 +323,7 @@ export async function reviewScreen({ root, params }: ScreenCtx) {
     evalBar.update(review.evals[cursor]);
     smallGraph.set(cursor);
     coachActions.replaceChildren();
-    movesEl.querySelectorAll('.cur').forEach((e) => e.classList.remove('cur'));
-    const cur = movesEl.querySelector<HTMLElement>(`[data-ply="${cursor}"]`);
-    cur?.classList.add('cur');
-    if (cur) movesEl.scrollTop = Math.max(0, cur.offsetTop - movesEl.clientHeight / 2);
+    markCurrent();
     under.scrollTop = 0;
     if (!m) {
       board.badge('a1', null);
@@ -273,6 +337,13 @@ export async function reviewScreen({ root, params }: ScreenCtx) {
       coachIcon.replaceChildren(icon('next'));
       coachIcon.style.background = '';
       setBubble(`<span class="muted">Playing to the next key move…</span> ${Math.floor(m.ply / 2) + 1}${m.color === 'w' ? '.' : '…'} <b>${m.san}</b>`);
+      return;
+    }
+    if (!isReady(cursor)) {
+      board.badge('a1', null);
+      coachIcon.replaceChildren(icon('engine'));
+      coachIcon.style.background = '';
+      setBubble(`<span class="muted">Taking a closer look at</span> <b>${m.san}</b><span class="muted">…</span>`);
       return;
     }
     const meta = CLS_META[m.cls];

@@ -1748,3 +1748,47 @@ body.full .tabbar {
   height: 20px;
   flex-shrink: 0;
 }
+
+/* Review depth picker */
+.depth-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 14px;
+  font-size: 13px;
+  color: var(--text-2);
+}
+
+.depth-row small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.depth-select {
+  width: auto;
+  max-width: 62%;
+  padding: 6px 10px;
+  font-size: 13px;
+  border-radius: 8px;
+}
+
+.depth-hub {
+  margin: 0 2px 14px;
+}
+
+.depth-hub .depth-row {
+  margin-top: 0;
+}
+
+.depth-note {
+  font-size: 11px;
+  margin-top: 4px;
+}
+
+.refine-status {
+  text-align: center;
+  font-size: 12px;
+  color: var(--muted);
+  margin: -4px 0 10px;
+}

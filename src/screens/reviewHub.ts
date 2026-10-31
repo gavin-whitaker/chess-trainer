@@ -3,6 +3,7 @@ import { h, icon, sheet, toast } from '../ui/dom';
 import { listItem, sectionTitle } from '../ui/layout';
 import { navigate } from '../router';
 import { reviewUrl, type Outcome } from '../review/analysis';
+import { depthSelect } from '../review/depthSelect';
 import type { ScreenCtx } from '../router';
 
 interface ImportedGame {
@@ -163,6 +164,7 @@ export function reviewHub({ root }: ScreenCtx) {
       ),
       fileInput,
     ),
+    h('div.depth-hub', depthSelect(81, () => toast('Saved. New reviews will use this depth')), h('div.muted.depth-note', 'Times are for a typical 40-move game. The summary shows up in seconds; the deeper look finishes while you review.')),
     ...(!recent.length ? [] : [
           sectionTitle('Recent reviews'),
           h('div.list', ...recent.map((r) => {

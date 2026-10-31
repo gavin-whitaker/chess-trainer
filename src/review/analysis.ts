@@ -113,13 +113,46 @@ const POOL_SIZE = 2;
 const pool: { engine: Engine; chain: Promise<unknown>; pending: number }[] = [];
 const memo = new Map<string, Promise<PosEval>>();
 
+export const DEPTHS = [12, 14, 16, 18, 20];
+const DEPTH_KEY = 'ct-review-depth';
+// The first pass uses this depth so the summary shows up fast; the chosen depth refines it after.
+const QUICK_DEPTH = 10;
+// Measured average per position (Stockfish lite, single thread, hash cleared) on an M-series Mac.
+const MAC_MS: Record<number, number> = { 10: 45, 12: 110, 14: 280, 16: 700, 18: 1520, 20: 3620 };
+const IPHONE_FACTOR = 2.5;
+
+export function reviewDepth(): number {
+  const d = Number(localStorage.getItem(DEPTH_KEY));
+  return DEPTHS.includes(d) ? d : 14;
+}
+
+export function setReviewDepth(d: number): void {
+  localStorage.setItem(DEPTH_KEY, String(d));
+}
+
+// Rough iPhone time for a full review at this depth, both engines working.
+export function estimateLabel(depth: number, positions: number): string {
+  const s = (positions * MAC_MS[depth] * IPHONE_FACTOR) / POOL_SIZE / 1000;
+  if (s < 10) return 'under 10s';
+  if (s < 50) return `~${Math.round(s / 5) * 5}s`;
+  return `~${Math.max(1, Math.round(s / 60))} min`;
+}
+
 function idleEngine() {
   if (!pool.length) for (let i = 0; i < POOL_SIZE; i++) pool.push({ engine: new Engine(16), chain: Promise.resolve(), pending: 0 });
   return pool.reduce((a, b) => (b.pending < a.pending ? b : a));
 }
 
-function evalPosition(fen: string): Promise<PosEval> {
-  const key = fen.split(' ').slice(0, 4).join(' ');
+function epd(fen: string): string {
+  return fen.split(' ').slice(0, 4).join(' ');
+}
+
+function knownEval(fen: string, depth: number): Promise<PosEval> | undefined {
+  return memo.get(`${depth}|${epd(fen)}`);
+}
+
+function evalPosition(fen: string, depth: number): Promise<PosEval> {
+  const key = `${depth}|${epd(fen)}`;
   const known = memo.get(key);
   if (known) return known;
   const t = terminalEval(new Chess(fen));
@@ -128,7 +161,7 @@ function evalPosition(fen: string): Promise<PosEval> {
   slot.pending++;
   const job = slot.chain.then(async () => {
     // Fixed depth (no time limit) so a review comes out the same on every run and every device.
-    const r = await slot.engine.analyze(fen, { depth: 14, multipv: 2, fresh: true });
+    const r = await slot.engine.analyze(fen, { depth, multipv: 2, fresh: true });
     slot.pending--;
     const [a, b] = r.lines;
     return {
@@ -146,32 +179,75 @@ function evalPosition(fen: string): Promise<PosEval> {
 
 // Start analyzing a position in the background (called after each move of a game).
 export function preAnalyze(fen: string): void {
-  void evalPosition(fen);
+  void evalPosition(fen, reviewDepth());
 }
 
-// Engine evals for every position of the game, cached so reopening a review is instant.
-export async function evaluateGame(ucis: string[], onProgress: (done: number, total: number) => void, isAlive: () => boolean): Promise<{ fens: string[]; evals: PosEval[] } | null> {
+const CACHE_KEY = 'reviews-v3';
+
+export interface GameEvals {
+  fens: string[];
+  evals: PosEval[];
+  // Which positions already have the full-depth result.
+  deep: boolean[];
+}
+
+// First pass: every position at a quick depth (or the full depth when it's already known),
+// so the summary can show up in seconds. Full-depth results are cached per game.
+export async function evaluateGame(ucis: string[], depth: number, onProgress: (done: number, total: number) => void, isAlive: () => boolean): Promise<GameEvals | null> {
   const c = new Chess();
   const fens = [c.fen()];
   for (const u of ucis) {
     c.move(parseUci(u));
     fens.push(c.fen());
   }
-  const key = ucis.join(',');
-  const cache = await kvGet<Record<string, PosEval[]>>('reviews-v2', {});
-  if (cache[key]?.length === fens.length) return { fens, evals: cache[key] };
+  const cache = await kvGet<Record<string, PosEval[]>>(CACHE_KEY, {});
+  const cached = cache[`${depth}:${ucis.join(',')}`];
+  if (cached?.length === fens.length) return { fens, evals: cached, deep: fens.map(() => true) };
+  const quick = Math.min(QUICK_DEPTH, depth);
+  const deep = fens.map((f) => !!knownEval(f, depth) || !!terminalEval(new Chess(f)) || quick === depth);
   let done = 0;
   onProgress(0, fens.length);
-  const evals = await Promise.all(fens.map((f) => evalPosition(f).then((e) => {
+  const evals = await Promise.all(fens.map((f, i) => evalPosition(f, deep[i] ? depth : quick).then((e) => {
     if (isAlive()) onProgress(++done, fens.length);
     return e;
   })));
   if (!isAlive()) return null;
+  return { fens, evals, deep };
+}
+
+// Second pass: bring every position up to the full depth, always working on the positions
+// closest to (and just ahead of) where the user is looking. Resolves once everything is deep.
+export async function refineGame(
+  ucis: string[],
+  game: GameEvals,
+  depth: number,
+  focus: () => number,
+  onResult: (index: number) => void,
+  isAlive: () => boolean,
+): Promise<void> {
+  const taken = game.deep.slice();
+  const pick = (): number => {
+    const from = Math.max(0, focus() - 1);
+    for (let i = from; i < taken.length; i++) if (!taken[i]) return i;
+    return taken.indexOf(false);
+  };
+  const worker = async () => {
+    for (let i = pick(); i >= 0 && isAlive(); i = pick()) {
+      taken[i] = true;
+      const e = await evalPosition(game.fens[i], depth);
+      if (!isAlive()) return;
+      game.evals[i] = e;
+      game.deep[i] = true;
+      onResult(i);
+    }
+  };
+  await Promise.all(Array.from({ length: POOL_SIZE }, worker));
+  if (!isAlive() || game.deep.includes(false)) return;
+  const cache = await kvGet<Record<string, PosEval[]>>(CACHE_KEY, {});
   const keys = Object.keys(cache);
   if (keys.length >= 10) delete cache[keys[0]];
-  cache[key] = evals;
-  await kvSet('reviews-v2', cache);
-  return { fens, evals };
+  cache[`${depth}:${ucis.join(',')}`] = game.evals;
+  await kvSet(CACHE_KEY, cache);
 }
 
 function material(c: Chess, color: 'w' | 'b'): number {
