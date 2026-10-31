@@ -28,6 +28,7 @@ export async function reviewScreen({ root, params }: ScreenCtx) {
   const side = (params.get('side') as 'white' | 'black') || 'white';
   const me = side === 'white' ? 'w' : 'b';
   const opp = params.get('opp') || 'Opponent';
+  const oppHtml = escapeHtml(opp);
   const result = (params.get('result') as Outcome) || null;
   let alive = true;
 
@@ -280,7 +281,7 @@ export async function reviewScreen({ root, params }: ScreenCtx) {
     coachIcon.style.background = meta.color;
     const showBest = m.bestUci && m.uci !== m.bestUci && !['book', 'forced', 'best', 'brilliant', 'great'].includes(m.cls);
     if (showBest) board.setShapes([{ orig: m.bestUci.slice(0, 2) as never, dest: m.bestUci.slice(2, 4) as never, brush: 'best' }]);
-    const who = m.color === me ? '' : `<span class="muted">${opp}:</span> `;
+    const who = m.color === me ? '' : `<span class="muted">${oppHtml}:</span> `;
     setBubble(who + (m.color === me ? m.text : forBot(m.text)), BAD.includes(m.cls));
     if (m.color === me && BAD.includes(m.cls)) coachActions.append(h('button.chip-btn', { onclick: () => startRetry(m) }, icon('retry'), 'Retry'));
     if (showBest) coachActions.append(h('button.chip-btn', { onclick: () => playBest(m) }, icon('play'), 'Show best'));
@@ -435,6 +436,11 @@ export async function reviewScreen({ root, params }: ScreenCtx) {
     engine.stop();
     board.destroy();
   };
+}
+
+// Player names come from imported PGNs and shared links, so they must never reach innerHTML raw.
+function escapeHtml(s: string): string {
+  return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 }
 
 // Phones sometimes deliver one tap as two clicks; drop the duplicate so a step never skips a move.

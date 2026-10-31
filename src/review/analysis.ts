@@ -127,7 +127,8 @@ function evalPosition(fen: string): Promise<PosEval> {
   const slot = idleEngine();
   slot.pending++;
   const job = slot.chain.then(async () => {
-    const r = await slot.engine.analyze(fen, { depth: 16, movetime: 700, multipv: 2 });
+    // Fixed depth (no time limit) so a review comes out the same on every run and every device.
+    const r = await slot.engine.analyze(fen, { depth: 14, multipv: 2, fresh: true });
     slot.pending--;
     const [a, b] = r.lines;
     return {
@@ -157,7 +158,7 @@ export async function evaluateGame(ucis: string[], onProgress: (done: number, to
     fens.push(c.fen());
   }
   const key = ucis.join(',');
-  const cache = await kvGet<Record<string, PosEval[]>>('reviews', {});
+  const cache = await kvGet<Record<string, PosEval[]>>('reviews-v2', {});
   if (cache[key]?.length === fens.length) return { fens, evals: cache[key] };
   let done = 0;
   onProgress(0, fens.length);
@@ -169,7 +170,7 @@ export async function evaluateGame(ucis: string[], onProgress: (done: number, to
   const keys = Object.keys(cache);
   if (keys.length >= 10) delete cache[keys[0]];
   cache[key] = evals;
-  await kvSet('reviews', cache);
+  await kvSet('reviews-v2', cache);
   return { fens, evals };
 }
 
@@ -277,6 +278,10 @@ export function reviewGame(fens: string[], evals: PosEval[], ucis: string[], boo
     else if (loss < 10) cls = 'inaccuracy';
     else if (loss < 20) cls = 'mistake';
     else cls = 'blunder';
+
+    // Letting the opponent force mate is always a blunder, even if the position was already bad.
+    const mateAgainst = (e: PosEval) => e.mate !== undefined && (color === 'w' ? e.mate < 0 : e.mate > 0);
+    if (!isBest && !bookMove && legal > 1 && mateAgainst(ea) && !mateAgainst(eb)) cls = 'blunder';
 
     const missedMate = eb.mate !== undefined && (color === 'w' ? eb.mate > 0 : eb.mate < 0) && !(ea.mate !== undefined && (color === 'w' ? ea.mate > 0 : ea.mate < 0));
     if ((cls === 'mistake' || cls === 'blunder' || cls === 'inaccuracy') && ((prev && (prev.cls === 'mistake' || prev.cls === 'blunder')) || missedMate) && wpAfter >= 30) cls = 'miss';

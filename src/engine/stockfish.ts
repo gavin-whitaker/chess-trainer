@@ -11,6 +11,8 @@ export interface AnalyzeOptions {
   depth?: number;
   movetime?: number;
   multipv?: number;
+  // Clear the hash first so the same position always gives the same result.
+  fresh?: boolean;
   onUpdate?: (lines: EngineLine[]) => void;
 }
 
@@ -75,6 +77,7 @@ export class Engine {
   private start(job: Job): void {
     this.job = job;
     const w = this.worker!;
+    if (job.opts.fresh) w.postMessage('ucinewgame');
     w.postMessage(`setoption name MultiPV value ${job.opts.multipv ?? 1}`);
     w.postMessage(`position fen ${job.fen}`);
     const { depth, movetime } = job.opts;

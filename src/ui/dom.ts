@@ -90,11 +90,19 @@ export function toast(msg: string, kind: 'ok' | 'bad' | '' = ''): void {
   }, 2200);
 }
 
+const openSheets = new Set<() => void>();
+
+// Called on navigation so a sheet never outlives the screen that opened it.
+export function closeAllSheets(): void {
+  openSheets.forEach((close) => close());
+}
+
 // Bottom sheet modal, Chess.com style.
 export function sheet(title: string, content: HTMLElement, opts: { onClose?: () => void } = {}): { close: () => void } {
   const backdrop = h('div.sheet-backdrop');
   const panel = h('div.sheet', h('div.sheet-grip'), title ? h('div.sheet-title', title) : null, content);
   const close = () => {
+    if (!openSheets.delete(close)) return;
     backdrop.classList.remove('open');
     panel.classList.remove('open');
     setTimeout(() => {
@@ -122,6 +130,7 @@ export function sheet(title: string, content: HTMLElement, opts: { onClose?: () 
     startY = 0;
   });
   document.body.append(backdrop, panel);
+  openSheets.add(close);
   requestAnimationFrame(() => {
     backdrop.classList.add('open');
     panel.classList.add('open');

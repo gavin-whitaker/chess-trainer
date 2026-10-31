@@ -3,7 +3,7 @@ import '@lichess-org/chessground/assets/chessground.cburnett.css';
 import './styles/app.css';
 import './styles/board.css';
 import { registerSW } from 'virtual:pwa-register';
-import { h, icon } from './ui/dom';
+import { closeAllSheets, h, icon } from './ui/dom';
 import { route, startRouter, navigate } from './router';
 import { applyTheme } from './settings';
 import { unlockAudio } from './board/feedback';
@@ -60,6 +60,7 @@ const tabbar = h(
 document.getElementById('app')!.append(view, tabbar);
 
 startRouter(view, (tab, full) => {
+  closeAllSheets();
   tabButtons.forEach((b, id) => b.classList.toggle('active', id === tab));
   document.body.classList.toggle('full', full);
 });
