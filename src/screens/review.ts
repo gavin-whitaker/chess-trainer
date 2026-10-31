@@ -93,6 +93,8 @@ export async function reviewScreen({ root, params }: ScreenCtx) {
   let practicing = false;
   let retryTarget: MoveReview | null = null;
   let retryHint = 0;
+  let playToken = 0;
+  let playTarget: number | null = null;
 
   const bigGraph = new EvalGraph(review.evals, moves, (ply) => openAt(ply));
   const smallGraph = new EvalGraph(review.evals, moves, (ply) => goto(ply), 46);
@@ -121,9 +123,31 @@ export async function reviewScreen({ root, params }: ScreenCtx) {
     return m.color === me ? ['mistake', 'miss', 'blunder', 'brilliant', 'great'].includes(m.cls) : ['blunder', 'brilliant'].includes(m.cls);
   }
 
-  function gotoNextKey() {
-    const k = moves.find((m) => m.ply >= cursor && isKeyMoment(m));
-    goto(k ? k.ply + 1 : review.fens.length - 1);
+  // Where the green Next button stops: every best move and every slip of yours, plus the opponent's big moments.
+  function isStop(m: MoveReview): boolean {
+    return m.color === me
+      ? ['brilliant', 'great', 'best', 'inaccuracy', 'mistake', 'miss', 'blunder'].includes(m.cls)
+      : ['brilliant', 'great', 'mistake', 'blunder'].includes(m.cls);
+  }
+
+  // Chess.com-style fast-forward: the moves in between play out quickly (about 4 seconds at most).
+  async function gotoNextKey() {
+    if (playTarget !== null) return goto(playTarget);
+    const from = Math.max(cursor, 0);
+    if (mode === 'retry') exitRetry();
+    const k = moves.find((m) => m.ply >= from && isStop(m));
+    const target = k ? k.ply + 1 : review.fens.length - 1;
+    if (target - from <= 1) return goto(target);
+    const token = ++playToken;
+    playTarget = target;
+    const delay = Math.max(150, Math.min(600, 4000 / (target - from)));
+    for (let ply = from + 1; ply <= target; ply++) {
+      show(ply);
+      if (ply === target) break;
+      await new Promise((r) => window.setTimeout(r, delay));
+      if (!alive || token !== playToken) return;
+    }
+    playTarget = null;
   }
 
   function renderSummary() {
@@ -184,6 +208,7 @@ export async function reviewScreen({ root, params }: ScreenCtx) {
   }
 
   function showSummary() {
+    stopPlayback();
     mode = 'browse';
     board.setMovable('none');
     boardScreen.style.display = 'none';
@@ -199,6 +224,16 @@ export async function reviewScreen({ root, params }: ScreenCtx) {
   }
 
   function goto(ply: number) {
+    stopPlayback();
+    show(ply);
+  }
+
+  function stopPlayback() {
+    playToken++;
+    playTarget = null;
+  }
+
+  function show(ply: number) {
     if (mode === 'retry') exitRetry();
     ply = Math.max(0, Math.min(review.fens.length - 1, ply));
     if (ply === cursor) return;
@@ -251,6 +286,7 @@ export async function reviewScreen({ root, params }: ScreenCtx) {
   }
 
   function playBest(m: MoveReview) {
+    stopPlayback();
     board.setPosition(review.fens[m.ply], m.ply > 0 ? moves[m.ply - 1].uci : undefined);
     board.clearShapes();
     board.badge('a1', null);
@@ -266,6 +302,7 @@ export async function reviewScreen({ root, params }: ScreenCtx) {
 
   // ---------- Retry a mistake ----------
   function startRetry(m: MoveReview) {
+    stopPlayback();
     mode = 'retry';
     retryTarget = m;
     cursor = m.ply;
