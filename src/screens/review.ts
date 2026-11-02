@@ -179,8 +179,9 @@ export async function reviewScreen({ root, params }: ScreenCtx) {
     return lead + body + extra;
   }
 
+  // Same moves the green Next stops on, minus plain best moves so the list stays short.
   function isKeyMoment(m: MoveReview): boolean {
-    return m.color === me ? ['mistake', 'miss', 'blunder', 'brilliant', 'great'].includes(m.cls) : ['blunder', 'brilliant'].includes(m.cls);
+    return isStop(m) && m.cls !== 'best';
   }
 
   // Where the green Next button stops: every best move and every slip of yours, plus the opponent's big moments.
@@ -271,6 +272,8 @@ export async function reviewScreen({ root, params }: ScreenCtx) {
 
   function showSummary() {
     stopPlayback();
+    bigGraph = new EvalGraph(review.evals, moves, (ply) => openAt(ply));
+    renderSummary();
     mode = 'browse';
     board.setMovable('none');
     boardScreen.style.display = 'none';

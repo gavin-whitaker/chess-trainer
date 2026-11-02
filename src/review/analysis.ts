@@ -271,25 +271,37 @@ function sanOf(fen: string, uci: string): string {
 }
 
 // Biggest piece the given side loses while playing out a line (captures of `victim` pieces).
+function pieceCounts(c: Chess, color: 'w' | 'b'): Record<string, number> {
+  const n: Record<string, number> = { p: 0, n: 0, b: 0, r: 0, q: 0 };
+  for (const row of c.board()) for (const p of row) if (p && p.color === color && p.type !== 'k') n[p.type]++;
+  return n;
+}
+
+// Material swing along a line. The named piece comes from the net change in piece counts,
+// so a queen trade followed by a lost rook reports the rook, not the queen.
 function lineSwing(fen: string, pv: string[], side: 'w' | 'b', plies = 5): { net: number; lost?: string; won?: string } {
   const c = new Chess(fen);
-  const start = material(c, side) - material(c, side === 'w' ? 'b' : 'w');
-  let lost: string | undefined;
-  let won: string | undefined;
+  const opp = side === 'w' ? 'b' : 'w';
+  const start = material(c, side) - material(c, opp);
+  const ownBefore = pieceCounts(c, side);
+  const oppBefore = pieceCounts(c, opp);
   for (const u of pv.slice(0, plies)) {
-    let m: Move;
     try {
-      m = c.move(parseUci(u));
+      c.move(parseUci(u));
     } catch {
       break;
     }
-    if (m.captured) {
-      if (m.color === side) {
-        if (!won || VAL[m.captured] > VAL[won]) won = m.captured;
-      } else if (!lost || VAL[m.captured] > VAL[lost]) lost = m.captured;
-    }
   }
-  const end = material(c, side) - material(c, side === 'w' ? 'b' : 'w');
+  const end = material(c, side) - material(c, opp);
+  const ownAfter = pieceCounts(c, side);
+  const oppAfter = pieceCounts(c, opp);
+  let lost: string | undefined;
+  let won: string | undefined;
+  for (const t of ['q', 'r', 'b', 'n', 'p']) {
+    const diff = (ownBefore[t] - ownAfter[t]) - (oppBefore[t] - oppAfter[t]);
+    if (diff > 0 && !lost) lost = t;
+    if (diff < 0 && !won) won = t;
+  }
   return { net: end - start, lost, won };
 }
 
