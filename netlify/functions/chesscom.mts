@@ -4,6 +4,13 @@
 const TCN = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!?{~}(^)[_]@#$,./&-*++=';
 const PIECES = 'qnrbkp';
 
+// Chess.com tags ordinary games with SetUp "1" and the normal starting FEN, so only a different FEN counts as custom.
+const START = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -';
+
+function isStandardStart(fen: string): boolean {
+  return fen.trim().split(/\s+/).slice(0, 4).join(' ') === START;
+}
+
 function square(i: number): string {
   return 'abcdefgh'[i % 8] + (Math.floor(i / 8) + 1);
 }
@@ -57,7 +64,7 @@ export default async (req: Request) => {
       white: headers.White || 'White',
       black: headers.Black || 'Black',
       result: headers.Result || '*',
-      fen: headers.SetUp === '1' ? headers.FEN : undefined,
+      fen: headers.SetUp === '1' && headers.FEN && !isStandardStart(headers.FEN) ? headers.FEN : undefined,
       ucis: decodeTcn(game.moveList),
     },
     { headers: { 'Cache-Control': 'public, max-age=86400' } },

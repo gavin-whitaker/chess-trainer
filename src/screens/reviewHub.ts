@@ -43,11 +43,18 @@ function outcomeFor(result: string, side: 'white' | 'black'): Outcome | null {
   return null;
 }
 
+// Chess.com PGNs carry SetUp "1" with the normal starting FEN, so only a different FEN counts as custom.
+const START = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -';
+
+function isStandardStart(fen: string): boolean {
+  return fen.trim().split(/\s+/).slice(0, 4).join(' ') === START;
+}
+
 function parsePgn(text: string): ImportedGame {
   const c = new Chess();
   c.loadPgn(text.trim());
   const hdr = c.getHeaders();
-  if (hdr.SetUp === '1' || hdr.FEN) throw new Error('Games from a custom starting position can’t be reviewed yet.');
+  if (hdr.FEN && !isStandardStart(hdr.FEN)) throw new Error('Games from a custom starting position can’t be reviewed yet.');
   const ucis = c.history({ verbose: true }).map((m) => m.from + m.to + (m.promotion || ''));
   if (!ucis.length) throw new Error('That PGN has no moves.');
   return { white: hdr.White || 'White', black: hdr.Black || 'Black', result: hdr.Result || '*', ucis };
@@ -72,10 +79,12 @@ async function fetchLichess(id: string): Promise<ImportedGame> {
 
 function loadFromLink(raw: string): Promise<ImportedGame> {
   const text = raw.trim();
-  const cc = text.match(/chess\.com\/(?:game\/(live|daily)\/|(live|daily)\/game\/|game\/)(\d+)/i);
+  const cc = text.match(/chess\.com\/(?:analysis\/)?(?:game\/(live|daily)\/|(live|daily)\/game\/|game\/)(\d+)/i);
   if (cc) return fetchChessCom((cc[1] || cc[2] || '').toLowerCase() || null, cc[3]);
   const li = text.match(/lichess\.org\/([a-zA-Z0-9]{8})/);
   if (li) return fetchLichess(li[1]);
+  if (/chess\.com/i.test(text)) return Promise.reject(new Error('That doesn’t look like a Chess.com game link.'));
+  if (/lichess\.org/i.test(text)) return Promise.reject(new Error('That doesn’t look like a Lichess game link.'));
   return Promise.reject(new Error('Paste a Chess.com or Lichess game link.'));
 }
 
